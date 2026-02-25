@@ -183,6 +183,7 @@ static int load_image_to_fb(vo_unit_t *vo, im_fb_t **out_fb)
 	fp = fopen(file_name, "rb");
 	if (!fp) {
 		LOGE("failed to open image file: %s", file_name);
+		im_hal_fb_free(fb);
 		return -1;
 	}
 
@@ -194,6 +195,7 @@ static int load_image_to_fb(vo_unit_t *vo, im_fb_t **out_fb)
 
 	if (read_size != mem_size) {
 		LOGI("fread mismatch: expect %d, got %zu", mem_size, read_size);
+		im_hal_fb_free(fb);
 		return -1;
 	}
 	LOGI("Image data loaded to framebuffer from file: %s", file_name);
@@ -456,6 +458,7 @@ clean_lv1:
 	LOGI("Program exited cleanly");
 
 clean_lv0:
+	vo_notify_deinit();
 
 	return 0;
 }

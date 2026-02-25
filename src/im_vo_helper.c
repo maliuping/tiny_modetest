@@ -146,7 +146,9 @@ int vo_notify_display_status(vo_notify_msg_t status)
 
 void vo_notify_deinit(void)
 {
-	/* unlink(VO_NOTIFY_FIFO); */
+	if (unlink(VO_NOTIFY_FILE) < 0 && errno != ENOENT) {
+		perror("unlink " VO_NOTIFY_FILE);
+	}
 }
 
 

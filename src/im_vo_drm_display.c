@@ -676,13 +676,18 @@ static void *drm_event_thread(void *arg)
 int vo_drm_event_ctx_init(vo_drm_event_ctx_t *ctx, int drm_fd)
 {
 	memset(ctx, 0, sizeof(*ctx));
+	ctx->wake_fd = -1;
 
 	ctx->fd = drm_fd;
 	ctx->running = true;
 	ctx->atomic_committed = false;
 
-	pthread_mutex_init(&ctx->lock, NULL);
-	pthread_cond_init(&ctx->commit_cond, NULL);
+	if (pthread_mutex_init(&ctx->lock, NULL) != 0)
+		return -1;
+	if (pthread_cond_init(&ctx->commit_cond, NULL) != 0) {
+		pthread_mutex_destroy(&ctx->lock);
+		return -1;
+	}
 
 	memset(&ctx->ring, 0, sizeof(ctx->ring));
 	atomic_init(&ctx->ring.widx, 0);
@@ -690,16 +695,24 @@ int vo_drm_event_ctx_init(vo_drm_event_ctx_t *ctx, int drm_fd)
 	atomic_init(&ctx->ring.data_ready, false);
 
 	ctx->wake_fd = eventfd(0, EFD_NONBLOCK);
-	if (ctx->wake_fd < 0)
+	if (ctx->wake_fd < 0) {
+		pthread_cond_destroy(&ctx->commit_cond);
+		pthread_mutex_destroy(&ctx->lock);
 		return -1;
+	}
 
 	ctx->evctx.version = DRM_EVENT_CONTEXT_VERSION;
 	ctx->evctx.page_flip_handler = vo_drm_page_flip_handler;
 	ctx->evctx.vblank_handler = vo_drm_vblank_handler;
 
 	if (pthread_create(&ctx->thread, NULL,
-					   drm_event_thread, ctx))
+					   drm_event_thread, ctx) != 0) {
+		close(ctx->wake_fd);
+		ctx->wake_fd = -1;
+		pthread_cond_destroy(&ctx->commit_cond);
+		pthread_mutex_destroy(&ctx->lock);
 		return -1;
+	}
 
 	return 0;
 }
